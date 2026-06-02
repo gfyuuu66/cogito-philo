@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Trophy, Shield, Cloud, HardDrive, Trash2, Sparkles } from "lucide-react";
 import { useStore } from "../lib/store";
 import { ADMIN_EMAIL } from "../lib/supabase";
+import Avatar from "../components/Avatar";
 
 const medal = ["#d4af37", "#9ca3af", "#cd7f32"];
 
@@ -65,11 +66,12 @@ export default function Classement() {
                 className={`card p-4 flex items-center gap-4 ${e.isMe ? "ring-2 ring-brand/40" : ""}`}
               >
                 <span
-                  className="grid place-items-center w-9 h-9 rounded-full font-display font-bold shrink-0"
+                  className="grid place-items-center w-8 h-8 rounded-full font-display font-bold shrink-0 tabular-nums"
                   style={i < 3 ? { background: medal[i] + "33", color: medal[i] } : { background: "var(--color-surface-2)", color: "var(--color-muted)" }}
                 >
                   {i + 1}
                 </span>
+                <Avatar value={e.avatar} name={e.pseudo} size={40} rounded="rounded-full" />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold flex items-center gap-2 truncate">
                     {e.pseudo}

@@ -1,11 +1,13 @@
 import { NavLink, Link } from "react-router-dom";
-import { BookOpen, Compass, Network, Trophy, User, Moon, Sun, Sparkles } from "lucide-react";
+import { BookOpen, Compass, Network, Trophy, User, Moon, Sun, Sparkles, LayoutDashboard, CalendarCheck } from "lucide-react";
 import { useTheme } from "../lib/theme";
 import { useStore } from "../lib/store";
+import Avatar from "./Avatar";
 import type { ReactNode } from "react";
 
 const nav = [
   { to: "/", label: "Notions", icon: BookOpen, end: true },
+  { to: "/plan", label: "Plan", icon: CalendarCheck, end: false },
   { to: "/methode", label: "Méthode", icon: Compass, end: false },
   { to: "/ponts", label: "Ponts", icon: Network, end: false },
   { to: "/classement", label: "Classement", icon: Trophy, end: false },
@@ -13,7 +15,8 @@ const nav = [
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { theme, toggle } = useTheme();
-  const { profile, points } = useStore();
+  const { profile, points, isAdmin } = useStore();
+  const links = isAdmin ? [...nav, { to: "/admin", label: "Admin", icon: LayoutDashboard, end: false }] : nav;
 
   return (
     <div className="min-h-dvh flex flex-col">
@@ -27,7 +30,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </Link>
 
           <nav className="flex items-center gap-1 ml-auto overflow-x-auto">
-            {nav.map(({ to, label, icon: Icon, end }) => (
+            {links.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -61,9 +64,13 @@ export default function Layout({ children }: { children: ReactNode }) {
                 }`
               }
             >
-              <span className="grid place-items-center w-6 h-6 rounded-md bg-accent-soft text-accent">
-                {profile ? <span className="text-xs font-bold">{profile.pseudo.charAt(0).toUpperCase()}</span> : <User size={15} />}
-              </span>
+              {profile ? (
+                <Avatar value={profile.avatar} name={profile.pseudo} size={24} rounded="rounded-md" />
+              ) : (
+                <span className="grid place-items-center w-6 h-6 rounded-md bg-accent-soft text-accent">
+                  <User size={15} />
+                </span>
+              )}
               {profile ? (
                 <span className="hidden sm:flex items-center gap-1 tabular-nums">
                   <Sparkles size={13} className="text-accent" /> {points}

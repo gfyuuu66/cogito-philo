@@ -1,15 +1,47 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Layers, HelpCircle, Quote } from "lucide-react";
 import type { Notion } from "../content/types";
 import ProgressRing from "./ProgressRing";
 
 export default function NotionCard({ notion, mastery, index }: { notion: Notion; mastery: number; index: number }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const allow = useRef(false);
+
+  useEffect(() => {
+    allow.current =
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches &&
+      !!window.matchMedia?.("(pointer: fine)").matches;
+  }, []);
+
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!allow.current || !el) return;
+    const r = el.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    const rx = (py / r.height - 0.5) * -8;
+    const ry = (px / r.width - 0.5) * 10;
+    el.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(6px)`;
+    el.style.setProperty("--mx", `${px}px`);
+    el.style.setProperty("--my", `${py}px`);
+  };
+
+  const onLeave = () => {
+    const el = ref.current;
+    if (el) el.style.transform = "";
+  };
+
   return (
     <Link
+      ref={ref}
       to={`/notion/${notion.id}`}
-      className="card card-hover p-5 flex flex-col gap-3 relative overflow-hidden"
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      className="card tilt p-5 flex flex-col gap-3 relative overflow-hidden animate-fade-up"
       style={{ animationDelay: `${index * 30}ms` }}
     >
+      <span className="tilt-glare" aria-hidden />
       <span className="absolute inset-x-0 top-0 h-1" style={{ background: notion.couleur }} aria-hidden />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

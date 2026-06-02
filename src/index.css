@@ -170,6 +170,23 @@
   }
   .btn-ghost:hover { background: var(--surface-2); }
 
+  /* Champs de formulaire d'authentification */
+  .auth-input {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .auth-input::placeholder { color: var(--faint); }
+  .auth-input:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 20%, transparent);
+  }
+
   /* Prose for course content */
   .prose-philo {
     font-family: var(--font-serif);
@@ -198,6 +215,85 @@
 }
 .flip-face--back { transform: rotateY(180deg); }
 
+/* ---------- Tilt 3D des cartes (suivi de la souris) ---------- */
+.tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.18s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: transform;
+}
+.tilt:hover {
+  box-shadow: var(--shadow-lift);
+  border-color: color-mix(in oklab, var(--brand) 35%, var(--line));
+}
+.tilt-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in oklab, var(--brand) 22%, transparent),
+    transparent 60%
+  );
+  mix-blend-mode: soft-light;
+}
+.tilt:hover .tilt-glare { opacity: 1; }
+.tilt > * { transform: translateZ(1px); }
+
+/* ---------- Constellation 3D (hero) ---------- */
+.orbit-scene {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  perspective: 900px;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.orbit-scene:active { cursor: grabbing; }
+.orbit-stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.orbit-node {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: -21px 0 0 -21px;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  will-change: transform, opacity;
+}
+.orbit-node:hover { z-index: 999 !important; }
+.orbit-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 92px;
+  height: 92px;
+  margin: -46px 0 0 -46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.orbit-link {
+  position: absolute;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--brand) 35%, transparent);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
 /* ---------- Animations ---------- */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
@@ -210,6 +306,19 @@
   100% { opacity: 1; transform: scale(1); }
 }
 .animate-pop { animation: popIn 0.35s ease both; }
+
+/* Perf mobile / tablette : un fond « fixed » provoque des repaints coûteux au
+   scroll (jank). Sur écrans tactiles, on le passe en « scroll ». */
+@media (pointer: coarse) {
+  body {
+    background-attachment: scroll;
+  }
+}
+@media (max-width: 480px) {
+  .orbit-scene {
+    height: 280px;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

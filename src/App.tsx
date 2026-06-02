@@ -7,6 +7,8 @@ import Methode from "./pages/Methode";
 import Ponts from "./pages/Ponts";
 import Classement from "./pages/Classement";
 import Profil from "./pages/Profil";
+import Admin from "./pages/Admin";
+import Plan from "./pages/Plan";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -37,8 +39,10 @@ export default function App() {
         <Route path="/notion/:id" element={<NotionDetail />} />
         <Route path="/methode" element={<Methode />} />
         <Route path="/ponts" element={<Ponts />} />
+        <Route path="/plan" element={<Plan />} />
         <Route path="/classement" element={<Classement />} />
         <Route path="/profil" element={<Profil />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

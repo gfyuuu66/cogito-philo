@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Compass, Network, Sparkles, Target, BookMarked } from "lucide-react";
+import { Search, Compass, Network, Sparkles, Target, BookMarked, CalendarCheck, ArrowRight } from "lucide-react";
 import { NOTIONS } from "../content";
 import NotionCard from "../components/NotionCard";
-import ProgressRing from "../components/ProgressRing";
+import Constellation3D from "../components/Constellation3D";
 import { useStore } from "../lib/store";
+import { buildPlan } from "../lib/plan";
 
 export default function Home() {
   const { mastery, points, notionMastery, profile } = useStore();
@@ -23,8 +24,38 @@ export default function Home() {
 
   const validees = NOTIONS.filter((n) => notionMastery(n.id) >= 70).length;
 
+  const plan = useMemo(
+    () => buildPlan({ createdAt: profile?.createdAt ?? null, isMastered: (id) => notionMastery(id) >= 70 }),
+    [profile?.createdAt, notionMastery]
+  );
+
   return (
     <div className="mx-auto max-w-6xl px-4">
+      {/* Rappel plan de révision */}
+      {!plan.examPassed && (
+        <Link
+          to="/plan"
+          className="mt-4 flex items-center gap-3 rounded-2xl border border-brand/30 bg-brand-soft px-4 py-3 hover:border-brand/60 transition-colors animate-fade-up"
+        >
+          <span className="grid place-items-center w-9 h-9 rounded-xl bg-brand text-white shrink-0">
+            <CalendarCheck size={18} />
+          </span>
+          <div className="flex-1 min-w-0 text-brand-ink">
+            <p className="font-semibold text-sm sm:text-base">
+              Bac de philo dans {plan.daysUntilBac} jour{plan.daysUntilBac > 1 ? "s" : ""}
+            </p>
+            <p className="text-sm opacity-80">
+              {plan.finished
+                ? "Toutes les notions sont maîtrisées 🎉 Continue de t'entraîner !"
+                : plan.todayNotions.length > 0
+                  ? `Objectif du jour : ${plan.todayNotions.length} notion${plan.todayNotions.length > 1 ? "s" : ""} à réviser.`
+                  : "Objectif du jour atteint 👍 Prends de l'avance !"}
+            </p>
+          </div>
+          <ArrowRight size={18} className="shrink-0 text-brand" />
+        </Link>
+      )}
+
       {/* Hero */}
       <section className="pt-10 pb-8 sm:pt-16 sm:pb-12 grid lg:grid-cols-[1.4fr_1fr] gap-8 items-center">
         <div className="animate-fade-up">
@@ -56,24 +87,30 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stat card */}
-        <div className="card p-6 animate-fade-up" style={{ animationDelay: "120ms" }}>
-          <div className="flex items-center gap-4">
-            <ProgressRing value={mastery} size={92} stroke={9}>
-              <span className="text-lg font-bold">{mastery}%</span>
-            </ProgressRing>
-            <div>
-              <p className="font-display text-xl">{profile ? `Salut ${profile.pseudo}` : "Ta progression"}</p>
-              <p className="text-sm text-muted">Maîtrise globale des 17 notions</p>
+        {/* Carte progression + constellation 3D */}
+        <div className="card p-5 animate-fade-up overflow-hidden" style={{ animationDelay: "120ms" }}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-display text-xl leading-tight truncate">
+                {profile ? `Salut ${profile.pseudo}` : "Ta progression"}
+              </p>
+              <p className="text-sm text-muted">Maîtrise des 17 notions</p>
             </div>
+            <span className="chip shrink-0">
+              <Sparkles size={13} className="text-accent" /> {points} pts
+            </span>
           </div>
-          <div className="grid grid-cols-3 gap-3 mt-6">
+
+          <Constellation3D />
+
+          <div className="grid grid-cols-3 gap-3">
             <Stat icon={<Sparkles size={16} className="text-accent" />} value={points} label="points" />
             <Stat icon={<BookMarked size={16} className="text-brand" />} value={`${validees}/17`} label="validées" />
-            <Stat icon={<Target size={16} className="text-success" />} value={NOTIONS.length} label="notions" />
+            <Stat icon={<Target size={16} className="text-success" />} value={`${mastery}%`} label="maîtrise" />
           </div>
+
           {!profile && (
-            <Link to="/profil" className="btn btn-ghost w-full mt-4 text-sm">
+            <Link to="/profil" className="btn btn-ghost w-full mt-3 text-sm">
               Choisis un pseudo pour sauvegarder tes scores →
             </Link>
           )}

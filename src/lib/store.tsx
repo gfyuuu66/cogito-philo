@@ -27,15 +27,38 @@ export interface Profile {
   id: string;
   pseudo: string;
   email: string | null;
+  avatar: string | null;
+  /** Date de création du compte (ISO) — sert au plan de révision. */
+  createdAt: string | null;
 }
 
 export interface LeaderEntry {
   id: string;
   pseudo: string;
   email: string | null;
+  avatar: string | null;
   points: number;
   mastery: number;
   isMe: boolean;
+}
+
+/** Détail complet d'un joueur (pour le tableau de bord admin). */
+export interface PlayerDetail {
+  id: string;
+  pseudo: string;
+  email: string | null;
+  avatar: string | null;
+  points: number;
+  mastery: number;
+  progress: ProgressMap;
+  updatedAt: string | null;
+  isMe: boolean;
+}
+
+/** Message d'authentification affiché à l'utilisateur. */
+export interface AuthMessage {
+  kind: "error" | "info";
+  text: string;
 }
 
 interface StoreCtx {
@@ -47,6 +70,9 @@ interface StoreCtx {
   points: number;
   mastery: number;
   leaderboard: LeaderEntry[];
+  players: PlayerDetail[];
+  authMessage: AuthMessage | null;
+  authBusy: boolean;
   // notion helpers
   notionProgress: (id: NotionId) => NotionProgress;
   notionMastery: (id: NotionId) => number;
@@ -55,8 +81,12 @@ interface StoreCtx {
   recordQuiz: (id: NotionId, correct: number, total: number) => void;
   // session
   setPseudo: (pseudo: string, email?: string) => void;
-  signInOAuth: (provider: "slack_oidc" | "google") => Promise<void>;
+  updateProfile: (patch: { pseudo?: string; avatar?: string | null }) => Promise<void>;
+  signInOAuth: (provider: "google") => Promise<void>;
+  signInEmail: (email: string, password: string) => Promise<void>;
+  signUpEmail: (email: string, password: string, pseudo: string) => Promise<void>;
   signOut: () => Promise<void>;
+  clearAuthMessage: () => void;
   resetMyProgress: () => void;
   resetLeaderboard: () => Promise<void>;
 }
@@ -97,6 +127,23 @@ function globalMastery(map: ProgressMap): number {
   return Math.round(total / NOTIONS.length);
 }
 
+/** Traduit les erreurs Supabase en messages clairs et utiles. */
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("provider is not enabled") || m.includes("unsupported provider")) {
+    return "La connexion Google n'est pas encore activée sur le serveur. Active le provider Google dans Supabase (voir SUPABASE.md), ou connecte-toi par e-mail en attendant.";
+  }
+  if (m.includes("invalid login credentials")) return "E-mail ou mot de passe incorrect.";
+  if (m.includes("email not confirmed")) return "E-mail pas encore confirmé : clique le lien reçu par mail, puis reconnecte-toi.";
+  if (m.includes("user already registered") || m.includes("already been registered"))
+    return "Un compte existe déjà avec cet e-mail. Connecte-toi plutôt.";
+  if (m.includes("password should be") || m.includes("at least"))
+    return "Mot de passe trop court (6 caractères minimum).";
+  if (m.includes("unable to validate email") || m.includes("invalid email")) return "E-mail invalide.";
+  if (m.includes("rate limit") || m.includes("too many")) return "Trop de tentatives. Réessaie dans quelques minutes.";
+  return message;
+}
+
 /* ------------------------------------------------------------------ */
 /* Persistance locale                                                  */
 /* ------------------------------------------------------------------ */
@@ -130,6 +177,11 @@ function saveActive(id: string | null) {
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-").slice(0, 40) || "anon";
 
+const pseudoFromUser = (u: { email?: string | null; user_metadata?: Record<string, unknown> }) =>
+  (u.user_metadata?.full_name as string) ||
+  (u.user_metadata?.name as string) ||
+  (u.email ? u.email.split("@")[0] : "Élève");
+
 /* ------------------------------------------------------------------ */
 /* Contexte                                                            */
 /* ------------------------------------------------------------------ */
@@ -143,7 +195,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<ProgressMap>({});
   const [localUsers, setLocalUsers] = useState<LocalUsers>({});
   const [cloudBoard, setCloudBoard] = useState<LeaderboardRow[]>([]);
+  const [authMessage, setAuthMessage] = useState<AuthMessage | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
   const syncTimer = useRef<number | null>(null);
+  /** Empêche d'écraser le cloud tant que la progression n'a pas été chargée depuis le cloud. */
+  const cloudHydrated = useRef(false);
+  /** Faux si les colonnes `progress`/`avatar` n'existent pas encore (schéma pas à jour) → on enregistre l'essentiel. */
+  const hasRichCols = useRef(true);
 
   /* ---- chargement initial ---- */
   useEffect(() => {
@@ -151,32 +209,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLocalUsers(users);
 
     if (mode === "cloud" && supabase) {
-      supabase.auth.getSession().then(({ data }) => {
-        const u = data.session?.user;
-        if (u) {
-          const email = u.email ?? null;
-          const pseudo =
-            (u.user_metadata?.full_name as string) ||
-            (u.user_metadata?.name as string) ||
-            (email ? email.split("@")[0] : "Élève");
-          const id = u.id;
-          const existing = users[id];
-          setProfile({ id, pseudo, email });
-          setProgress(existing?.progress ?? {});
+      // Erreur OAuth (ex. Google non activé) capturée au chargement par supabase.ts → message clair.
+      const stored = sessionStorage.getItem("cogito.auth.error");
+      if (stored) {
+        sessionStorage.removeItem("cogito.auth.error");
+        setAuthMessage({ kind: "error", text: friendlyAuthError(stored) });
+      }
+
+      // Récupère la progression cloud d'un utilisateur connecté, sinon retombe sur le local.
+      const hydrate = async (u: {
+        id: string;
+        email?: string | null;
+        created_at?: string;
+        user_metadata?: Record<string, unknown>;
+      }) => {
+        const email = u.email ?? null;
+        let prog: ProgressMap = users[u.id]?.progress ?? {};
+        let avatar = (u.user_metadata?.avatar_url as string) || (u.user_metadata?.avatar as string) || null;
+        try {
+          // select("*") : ne casse pas si les colonnes `progress`/`avatar` n'existent pas encore.
+          const { data } = await supabase!.from("scores").select("*").eq("user_id", u.id).maybeSingle();
+          const row = data as { progress?: unknown; avatar?: string | null } | null;
+          const cloudProg = (row?.progress ?? null) as ProgressMap | null;
+          if (cloudProg && Object.keys(cloudProg).length) prog = cloudProg;
+          if (!avatar && row?.avatar) avatar = row.avatar;
+        } catch {
+          /* hors-ligne : on garde la progression locale */
         }
+        setProfile({ id: u.id, pseudo: pseudoFromUser(u), email, avatar, createdAt: u.created_at ?? null });
+        cloudHydrated.current = true;
+        setProgress(prog);
+      };
+
+      supabase.auth.getSession().then(async ({ data }) => {
+        const u = data.session?.user;
+        if (u) await hydrate(u);
         setReady(true);
       });
-      const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "INITIAL_SESSION") return; // déjà géré par getSession()
         const u = session?.user;
         if (u) {
-          const email = u.email ?? null;
-          const pseudo =
-            (u.user_metadata?.full_name as string) ||
-            (u.user_metadata?.name as string) ||
-            (email ? email.split("@")[0] : "Élève");
-          setProfile({ id: u.id, pseudo, email });
+          setAuthMessage(null);
+          void hydrate(u);
         } else {
+          cloudHydrated.current = false;
           setProfile(null);
+          setProgress({});
         }
       });
       return () => sub.subscription.unsubscribe();
@@ -197,21 +277,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveUsers(users);
     setLocalUsers(users);
 
-    // sync cloud (debounce)
-    if (mode === "cloud" && supabase) {
+    // sync cloud (debounce) — seulement après hydratation pour ne pas écraser le cloud
+    if (mode === "cloud" && supabase && cloudHydrated.current) {
       if (syncTimer.current) window.clearTimeout(syncTimer.current);
+      const prof = profile;
+      const snapshot = progress;
       syncTimer.current = window.setTimeout(() => {
-        void supabase!
-          .from("scores")
-          .upsert({
-            user_id: profile.id,
-            pseudo: profile.pseudo,
-            email: profile.email,
-            points: totalPoints(progress),
-            mastery: globalMastery(progress),
+        void (async () => {
+          const row: {
+            user_id: string;
+            pseudo: string;
+            email: string | null;
+            points: number;
+            mastery: number;
+            updated_at: string;
+            avatar?: string | null;
+            progress?: ProgressMap;
+          } = {
+            user_id: prof.id,
+            pseudo: prof.pseudo,
+            email: prof.email,
+            points: totalPoints(snapshot),
+            mastery: globalMastery(snapshot),
             updated_at: new Date().toISOString(),
-          })
-          .then(() => void refreshCloudBoard());
+          };
+          if (hasRichCols.current) {
+            row.progress = snapshot;
+            row.avatar = prof.avatar;
+          }
+          const { error } = await supabase!.from("scores").upsert(row);
+          // Schéma pas encore migré : on réessaie sans les colonnes riches pour ne pas bloquer la sauvegarde.
+          if (error && /(progress|avatar)/i.test(error.message)) {
+            hasRichCols.current = false;
+            delete row.progress;
+            delete row.avatar;
+            await supabase!.from("scores").upsert(row);
+          }
+          await refreshCloudBoard();
+        })();
       }, 800);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,7 +326,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .from("scores")
       .select("*")
       .order("points", { ascending: false })
-      .limit(100);
+      .limit(200);
     if (data) setCloudBoard(data as LeaderboardRow[]);
   }, []);
 
@@ -260,23 +363,96 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const id = slug(pseudo);
     const users = loadUsers();
     const existing = users[id];
-    const prof: Profile = { id, pseudo: pseudo.trim() || "Élève", email: email?.toLowerCase() ?? existing?.profile.email ?? null };
+    const prof: Profile = {
+      id,
+      pseudo: pseudo.trim() || "Élève",
+      email: email?.toLowerCase() ?? existing?.profile.email ?? null,
+      avatar: existing?.profile.avatar ?? null,
+      createdAt: existing?.profile.createdAt ?? new Date().toISOString(),
+    };
     setProfile(prof);
     setProgress(existing?.progress ?? {});
     saveActive(id);
   }, []);
 
-  const signInOAuth = useCallback(async (provider: "slack_oidc" | "google") => {
+  /** Met à jour le pseudo et/ou l'avatar (réservé aux comptes : il faut un profil). */
+  const updateProfile = useCallback(
+    async (patch: { pseudo?: string; avatar?: string | null }) => {
+      if (!profile) return;
+      const next: Profile = {
+        ...profile,
+        pseudo: patch.pseudo !== undefined ? patch.pseudo.trim() || profile.pseudo : profile.pseudo,
+        avatar: patch.avatar !== undefined ? patch.avatar : profile.avatar,
+      };
+      setProfile(next);
+      const users = { ...loadUsers(), [next.id]: { profile: next, progress } };
+      saveUsers(users);
+      setLocalUsers(users);
+      if (mode === "cloud" && supabase) {
+        const data: Record<string, unknown> = {};
+        if (patch.pseudo !== undefined) data.full_name = next.pseudo;
+        if (patch.avatar !== undefined) data.avatar_url = next.avatar;
+        const { error } = await supabase.auth.updateUser({ data });
+        if (error) setAuthMessage({ kind: "error", text: friendlyAuthError(error.message) });
+      }
+    },
+    [profile, progress, mode]
+  );
+
+  const signInOAuth = useCallback(async (provider: "google") => {
     if (!supabase) return;
-    await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } });
+    setAuthMessage(null);
+    setAuthBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthMessage({ kind: "error", text: friendlyAuthError(error.message) });
+      setAuthBusy(false);
+    }
+    // En cas de succès, le navigateur est redirigé vers Google : pas besoin de remettre authBusy.
+  }, []);
+
+  const signInEmail = useCallback(async (email: string, password: string) => {
+    if (!supabase) return;
+    setAuthMessage(null);
+    setAuthBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) setAuthMessage({ kind: "error", text: friendlyAuthError(error.message) });
+    setAuthBusy(false);
+  }, []);
+
+  const signUpEmail = useCallback(async (email: string, password: string, pseudo: string) => {
+    if (!supabase) return;
+    setAuthMessage(null);
+    setAuthBusy(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { full_name: pseudo.trim() || email.split("@")[0] } },
+    });
+    if (error) {
+      setAuthMessage({ kind: "error", text: friendlyAuthError(error.message) });
+    } else if (!data.session) {
+      // Confirmation par e-mail requise (réglage Supabase).
+      setAuthMessage({
+        kind: "info",
+        text: "Compte créé ✅ Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.",
+      });
+    }
+    setAuthBusy(false);
   }, []);
 
   const signOut = useCallback(async () => {
     if (mode === "cloud" && supabase) await supabase.auth.signOut();
+    cloudHydrated.current = false;
     setProfile(null);
     setProgress({});
     saveActive(null);
   }, [mode]);
+
+  const clearAuthMessage = useCallback(() => setAuthMessage(null), []);
 
   const resetMyProgress = useCallback(() => {
     if (!profile) return;
@@ -305,6 +481,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: r.user_id,
         pseudo: r.pseudo,
         email: r.email,
+        avatar: r.user_id === profile?.id ? profile?.avatar ?? r.avatar : r.avatar,
         points: r.points,
         mastery: r.mastery,
         isMe: r.user_id === profile?.id,
@@ -314,16 +491,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       id: u.profile.id,
       pseudo: u.profile.pseudo,
       email: u.profile.email,
+      avatar: u.profile.avatar ?? null,
       points: totalPoints(u.progress),
       mastery: globalMastery(u.progress),
       isMe: u.profile.id === profile?.id,
     }));
     // s'assurer que l'utilisateur courant apparaît même sans encore de save
     if (profile && !entries.some((e) => e.id === profile.id)) {
-      entries.push({ id: profile.id, pseudo: profile.pseudo, email: profile.email, points, mastery, isMe: true });
+      entries.push({ id: profile.id, pseudo: profile.pseudo, email: profile.email, avatar: profile.avatar, points, mastery, isMe: true });
     }
     return entries.sort((a, b) => b.points - a.points);
   }, [mode, cloudBoard, localUsers, profile, points, mastery]);
+
+  /** Détail complet par joueur (progression notion par notion) pour le tableau de bord admin. */
+  const players: PlayerDetail[] = useMemo(() => {
+    const list: PlayerDetail[] =
+      mode === "cloud"
+        ? cloudBoard.map((r) => ({
+            id: r.user_id,
+            pseudo: r.pseudo,
+            email: r.email,
+            avatar: r.user_id === profile?.id ? profile?.avatar ?? r.avatar : r.avatar,
+            points: r.points,
+            mastery: r.mastery,
+            progress: (r.progress ?? {}) as ProgressMap,
+            updatedAt: r.updated_at ?? null,
+            isMe: r.user_id === profile?.id,
+          }))
+        : Object.values(localUsers).map((u) => ({
+            id: u.profile.id,
+            pseudo: u.profile.pseudo,
+            email: u.profile.email,
+            avatar: u.profile.avatar ?? null,
+            points: totalPoints(u.progress),
+            mastery: globalMastery(u.progress),
+            progress: u.progress,
+            updatedAt: null,
+            isMe: u.profile.id === profile?.id,
+          }));
+    return list.sort((a, b) => b.points - a.points);
+  }, [mode, cloudBoard, localUsers, profile]);
 
   const value: StoreCtx = {
     ready,
@@ -334,14 +541,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     points,
     mastery,
     leaderboard,
+    players,
+    authMessage,
+    authBusy,
     notionProgress: (id) => progress[id] ?? emptyProgress(),
     notionMastery: (id) => masteryOf(progress[id] ?? emptyProgress()),
     markCoursLu,
     markFlashcardsDone,
     recordQuiz,
     setPseudo,
+    updateProfile,
     signInOAuth,
+    signInEmail,
+    signUpEmail,
     signOut,
+    clearAuthMessage,
     resetMyProgress,
     resetLeaderboard,
   };

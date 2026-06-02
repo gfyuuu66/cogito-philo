@@ -22,6 +22,8 @@ ensemble**. Suivi de progression et **classement**.
   check-list du jour J.
 - **Ponts** entre notions + sujets transversaux.
 - **Progression** sauvegardée + **classement** (points et maîtrise).
+- **Constellation 3D** interactive des 17 notions sur l'accueil + cartes en 3D.
+- **Tableau de bord admin** : suivi détaillé de la progression de chaque joueur.
 - **Thème clair / sombre**, responsive, rapide.
 
 ## 🚀 Démarrer
@@ -44,8 +46,10 @@ local** (progression + classement dans le navigateur).
 
 ## ☁️ Mode cloud (optionnel)
 
-Pour un **login Slack / Google** et un **classement partagé** entre plusieurs
-personnes, voir **[SUPABASE.md](SUPABASE.md)**. Admin par défaut :
+Pour un **login (Google / e-mail)**, un **classement partagé** entre plusieurs
+personnes et un **tableau de bord admin** (progression détaillée de chaque
+joueur), voir **[SUPABASE.md](SUPABASE.md)**. La connexion par e-mail marche
+tout de suite ; Google se branche en quelques clics. Admin par défaut :
 `samzyboss51@gmail.com`.
 
 ## 🧱 Stack
@@ -65,8 +69,8 @@ src/
     index.ts            # agrège les notions
     method.ts           # méthode de la dissertation
     clusters.ts         # notions liées + sujets transversaux
-  components/           # Layout, Flashcards, Quiz, NotionCard, ...
-  pages/                # Home, NotionDetail, Methode, Ponts, Classement, Profil
+  components/           # Layout, Flashcards, Quiz, NotionCard, Constellation3D, ...
+  pages/                # Home, NotionDetail, Methode, Ponts, Classement, Profil, Admin
   lib/                  # store (progression), theme, supabase, markup
 ```
 
