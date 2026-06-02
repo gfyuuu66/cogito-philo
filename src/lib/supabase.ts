@@ -50,29 +50,3 @@ export interface LeaderboardRow {
   progress: Record<string, CloudNotionProgress> | null;
   updated_at: string;
 }
-
-/**
- * Capture une erreur OAuth renvoyée dans l'URL de retour (ex. « provider is not
- * enabled » quand Google n'est pas activé) AVANT le rendu React — donc une seule
- * fois, sans souci de double-exécution en mode strict. On nettoie l'URL, on garde
- * le message pour la page Profil, et on y redirige si on a atterri ailleurs.
- */
-function captureOAuthError() {
-  if (typeof window === "undefined" || !cloudEnabled) return;
-  const qs = new URLSearchParams(window.location.search);
-  const hs = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const raw =
-    qs.get("error_description") || hs.get("error_description") || qs.get("error") || hs.get("error");
-  if (!raw) return;
-  window.history.replaceState({}, "", window.location.pathname);
-  try {
-    sessionStorage.setItem("cogito.auth.error", decodeURIComponent(raw.replace(/\+/g, " ")));
-  } catch {
-    /* sessionStorage indisponible */
-  }
-  if (!window.location.pathname.startsWith("/profil")) {
-    window.location.replace(window.location.origin + "/profil");
-  }
-}
-
-captureOAuthError();

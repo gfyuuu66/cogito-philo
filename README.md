@@ -23,6 +23,9 @@ ensemble**. Suivi de progression et **classement**.
 - **Ponts** entre notions + sujets transversaux.
 - **Progression** sauvegardée + **classement** (points et maîtrise).
 - **Constellation 3D** interactive des 17 notions sur l'accueil + cartes en 3D.
+- **Plan de révision** jusqu'au bac (objectif du jour) + **citation du jour**.
+- **Rangs philosophiques** (du Néophyte au Sage) + **sauvegarde/restauration** de la progression.
+- **Photo de profil** (upload ou emoji) modifiable, **nom** modifiable.
 - **Tableau de bord admin** : suivi détaillé de la progression de chaque joueur.
 - **Thème clair / sombre**, responsive, rapide.
 
@@ -46,11 +49,10 @@ local** (progression + classement dans le navigateur).
 
 ## ☁️ Mode cloud (optionnel)
 
-Pour un **login (Google / e-mail)**, un **classement partagé** entre plusieurs
+Pour un **login par e-mail**, un **classement partagé** entre plusieurs
 personnes et un **tableau de bord admin** (progression détaillée de chaque
 joueur), voir **[SUPABASE.md](SUPABASE.md)**. La connexion par e-mail marche
-tout de suite ; Google se branche en quelques clics. Admin par défaut :
-`samzyboss51@gmail.com`.
+sans configuration. Admin par défaut : `samzyboss51@gmail.com`.
 
 ## 🧱 Stack
 

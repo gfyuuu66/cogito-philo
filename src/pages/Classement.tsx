@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Trophy, Shield, Cloud, HardDrive, Trash2, Sparkles } from "lucide-react";
 import { useStore } from "../lib/store";
 import { ADMIN_EMAIL } from "../lib/supabase";
+import { rankOf } from "../lib/ranks";
 import Avatar from "../components/Avatar";
 
 const medal = ["#d4af37", "#9ca3af", "#cd7f32"];
@@ -60,6 +61,7 @@ export default function Classement() {
         <ol className="space-y-2">
           {leaderboard.map((e, i) => {
             const admin = (e.email ?? "").toLowerCase() === ADMIN_EMAIL;
+            const rank = rankOf(e.points);
             return (
               <li
                 key={e.id}
@@ -81,6 +83,9 @@ export default function Classement() {
                         <Shield size={11} /> admin
                       </span>
                     )}
+                  </p>
+                  <p className="text-xs text-faint mt-0.5">
+                    {rank.emoji} {rank.title} · {e.mastery}% maîtrise
                   </p>
                   <div className="h-1.5 rounded-full bg-surface-2 mt-1.5 overflow-hidden max-w-xs">
                     <div className="h-full rounded-full bg-brand" style={{ width: `${e.mastery}%` }} />

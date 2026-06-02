@@ -79,10 +79,10 @@ interface StoreCtx {
   markCoursLu: (id: NotionId) => void;
   markFlashcardsDone: (id: NotionId) => void;
   recordQuiz: (id: NotionId, correct: number, total: number) => void;
+  importProgress: (map: ProgressMap) => void;
   // session
   setPseudo: (pseudo: string, email?: string) => void;
   updateProfile: (patch: { pseudo?: string; avatar?: string | null }) => Promise<void>;
-  signInOAuth: (provider: "google") => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string, pseudo: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -125,6 +125,27 @@ function totalPoints(map: ProgressMap): number {
 function globalMastery(map: ProgressMap): number {
   const total = NOTIONS.reduce((s, n) => s + masteryOf(map[n.id] ?? emptyProgress()), 0);
   return Math.round(total / NOTIONS.length);
+}
+
+/** Valide/nettoie une progression importée (fichier de sauvegarde) avant de l'appliquer. */
+function sanitizeProgress(input: unknown): ProgressMap {
+  const out: ProgressMap = {};
+  if (!input || typeof input !== "object") return out;
+  const ids = new Set<string>(NOTIONS.map((n) => n.id));
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (!ids.has(k) || !v || typeof v !== "object") continue;
+    const p = v as Record<string, unknown>;
+    const qb = p.quizBest as Record<string, unknown> | null | undefined;
+    out[k] = {
+      coursLu: !!p.coursLu,
+      flashcardsDone: !!p.flashcardsDone,
+      quizBest:
+        qb && typeof qb.correct === "number" && typeof qb.total === "number"
+          ? { correct: qb.correct, total: qb.total }
+          : null,
+    };
+  }
+  return out;
 }
 
 /** Traduit les erreurs Supabase en messages clairs et utiles. */
@@ -209,13 +230,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLocalUsers(users);
 
     if (mode === "cloud" && supabase) {
-      // Erreur OAuth (ex. Google non activé) capturée au chargement par supabase.ts → message clair.
-      const stored = sessionStorage.getItem("cogito.auth.error");
-      if (stored) {
-        sessionStorage.removeItem("cogito.auth.error");
-        setAuthMessage({ kind: "error", text: friendlyAuthError(stored) });
-      }
-
       // Récupère la progression cloud d'un utilisateur connecté, sinon retombe sur le local.
       const hydrate = async (u: {
         id: string;
@@ -359,6 +373,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [updateProgress]
   );
 
+  /** Restaure une progression depuis une sauvegarde (remplace l'actuelle). */
+  const importProgress = useCallback((map: ProgressMap) => {
+    setProgress(sanitizeProgress(map));
+  }, []);
+
   const setPseudo = useCallback((pseudo: string, email?: string) => {
     const id = slug(pseudo);
     const users = loadUsers();
@@ -398,21 +417,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [profile, progress, mode]
   );
-
-  const signInOAuth = useCallback(async (provider: "google") => {
-    if (!supabase) return;
-    setAuthMessage(null);
-    setAuthBusy(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) {
-      setAuthMessage({ kind: "error", text: friendlyAuthError(error.message) });
-      setAuthBusy(false);
-    }
-    // En cas de succès, le navigateur est redirigé vers Google : pas besoin de remettre authBusy.
-  }, []);
 
   const signInEmail = useCallback(async (email: string, password: string) => {
     if (!supabase) return;
@@ -549,9 +553,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     markCoursLu,
     markFlashcardsDone,
     recordQuiz,
+    importProgress,
     setPseudo,
     updateProfile,
-    signInOAuth,
     signInEmail,
     signUpEmail,
     signOut,

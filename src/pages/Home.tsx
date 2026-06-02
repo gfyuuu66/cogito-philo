@@ -4,6 +4,7 @@ import { Search, Compass, Network, Sparkles, Target, BookMarked, CalendarCheck, 
 import { NOTIONS } from "../content";
 import NotionCard from "../components/NotionCard";
 import Constellation3D from "../components/Constellation3D";
+import DailyQuote from "../components/DailyQuote";
 import { useStore } from "../lib/store";
 import { buildPlan } from "../lib/plan";
 
@@ -116,6 +117,11 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Citation du jour */}
+      <div className="mb-6">
+        <DailyQuote />
+      </div>
 
       {/* Search */}
       <div className="sticky top-16 z-30 -mx-4 px-4 py-3 bg-[color-mix(in_oklab,var(--canvas)_85%,transparent)] backdrop-blur-md border-y border-line">
