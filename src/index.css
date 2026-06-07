@@ -294,6 +294,49 @@
   pointer-events: none;
 }
 
+/* ---------- Carte 3D des liens (page Résumé) ---------- */
+.lc-scene {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+}
+.lc-scene:active { cursor: grabbing; }
+.lc-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  will-change: transform, opacity;
+}
+.lc-node:hover { z-index: 9999 !important; }
+.lc-link {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  margin-top: -1px;
+  transform-origin: 0 50%;
+  border-radius: 999px;
+  pointer-events: none;
+  will-change: transform, opacity, width;
+}
+@media (max-width: 480px) {
+  .lc-scene { height: 320px; }
+}
+
 /* ---------- Animations ---------- */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }

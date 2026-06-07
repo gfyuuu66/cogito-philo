@@ -1,5 +1,5 @@
 import { NavLink, Link } from "react-router-dom";
-import { BookOpen, Compass, Network, Trophy, User, Moon, Sun, Sparkles, LayoutDashboard, CalendarCheck } from "lucide-react";
+import { BookOpen, Compass, Network, Trophy, User, Moon, Sun, Sparkles, LayoutDashboard, CalendarCheck, NotebookText } from "lucide-react";
 import { useTheme } from "../lib/theme";
 import { useStore } from "../lib/store";
 import Avatar from "./Avatar";
@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 const nav = [
   { to: "/", label: "Notions", icon: BookOpen, end: true },
+  { to: "/resume", label: "Résumé", icon: NotebookText, end: false },
   { to: "/plan", label: "Plan", icon: CalendarCheck, end: false },
   { to: "/methode", label: "Méthode", icon: Compass, end: false },
   { to: "/ponts", label: "Ponts", icon: Network, end: false },

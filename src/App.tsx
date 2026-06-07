@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, Link } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import NotionDetail from "./pages/NotionDetail";
+import Resume from "./pages/Resume";
 import Methode from "./pages/Methode";
 import Ponts from "./pages/Ponts";
 import Classement from "./pages/Classement";
@@ -37,6 +38,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/notion/:id" element={<NotionDetail />} />
+        <Route path="/resume" element={<Resume />} />
         <Route path="/methode" element={<Methode />} />
         <Route path="/ponts" element={<Ponts />} />
         <Route path="/plan" element={<Plan />} />
